@@ -29,14 +29,18 @@ type Order =
       OrderLines: OrderLine list
       AmountToBill: AmountToBill }
 
+type UnvalidatedOrder = Undefined
+type ValidatedOrder = Undefined
+
 // Domain - "verbs"
 
-type ValidateOrder = UnvalidatedOrder -> Result<ValidatedOrder, ValidationError list>
-
-and ValidationError =
+type ValidationError =
     { FieldName: string
       ErrorDescription: string }
 
+// type ValidationResponse<'a> = Async<Result<'a, ValidationError list>>
+
+type ValidateOrder = UnvalidatedOrder -> Async<Result<ValidatedOrder, ValidationError list>>
 
 
 // examples
