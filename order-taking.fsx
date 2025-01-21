@@ -1,3 +1,5 @@
+namespace OrderTaking.Domain
+
 // Domain - "nouns"
 
 type WidgetCode = WidgetCode of string // A wrapper type. Starting with "W" then 4 digits
@@ -16,39 +18,53 @@ type OrderQuantity =
 
 type Undefined = exn
 
+type OrderId = Undefined
+type OrderLineId = Undefined
+type CustomerId = Undefined
+
 type CustomerInfo = Undefined
 type ShippingAddress = Undefined
 type BillingAddress = Undefined
-type OrderLine = Undefined
-type AmountToBill = Undefined
+type Price = Undefined
+type BillingAmount = Undefined
 
-type Order =
-    { CustomerInfo: CustomerInfo
-      ShippingAddress: ShippingAddress
-      BillingAddress: BillingAddress
-      OrderLines: OrderLine list
-      AmountToBill: AmountToBill }
+type Order = { 
+    Id: OrderId
+    CustomerId: CustomerId
+    CustomerInfo: CustomerInfo
+    ShippingAddress: ShippingAddress
+    BillingAddress: BillingAddress
+    OrderLines: OrderLine list
+    AmountToBill: BillingAmount } 
 
-type UnvalidatedOrder = Undefined
-type ValidatedOrder = Undefined
+and OrderLine = { 
+    Id: OrderLineId
+    OrderId: OrderId
+    ProductCode: ProductCode
+    Quantity: OrderQuantity
+    Price: Price 
+}
 
-// Domain - "verbs"
+type UnvalidatedOrder = {
+    OrderId: string
+    CustomerInfo: string
+    ShippingAddress: string
+}
 
-type ValidationError =
+type PlaceOrderEvents = {
+    AcknowledgementSent: Undefined
+    OrderPlaced: Undefined
+    BillableOrderPlaced: Undefined
+}
+
+type PlaceOrderError = 
+    | ValidationError of ValidationError list
+    | ProductNotFoundError of ProductCode
+
+and ValidationError =
     { FieldName: string
       ErrorDescription: string }
 
-// type ValidationResponse<'a> = Async<Result<'a, ValidationError list>>
+// Domain - "verbs"
 
-type ValidateOrder = UnvalidatedOrder -> Async<Result<ValidatedOrder, ValidationError list>>
-
-
-// examples
-
-let widgetCode = WidgetCode "W1234"
-let gizmoCode = GizmoCode "G123"
-
-let processWidgetCode (WidgetCode widgetCode) =
-    printfn "Processing widget code %s" widgetCode
-
-processWidgetCode widgetCode
+type PlaceOrder = UnvalidatedOrder -> Result<PlaceOrderEvents, PlaceOrderError>
