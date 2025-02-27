@@ -9,13 +9,11 @@ let processWidgetCode (WidgetCode widgetCode) =
 
 processWidgetCode widgetCode
 
-let unitQuantity = 
- UnitQuantity.create 10
+let unitQuantity = UnitQuantity.create 10
 
 match unitQuantity with
-| Ok(quantity) -> 
+| Ok(quantity) ->
     printfn "Success: value is %A" quantity
     let innerValue = UnitQuantity.value quantity
     printfn "Inner value is %i" innerValue
 | Error(message) -> printfn "Failure: %s" message
-

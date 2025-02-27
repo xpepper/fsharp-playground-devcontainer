@@ -11,23 +11,19 @@ type Issuer =
     | Visa
     | Mastercard
 
-type Month = 
-  | Jan
-  | Feb
-  | Dec
+type Month =
+    | Jan
+    | Feb
+    | Dec
 
 type Year = Year of int
 
-type ExpirationDate = {
-    Month: Month
-    Year: Year
-}
+type ExpirationDate = { Month: Month; Year: Year }
 
 type CreditCardInfo =
     { CreditCardNumber: CreditCardNumber
-      Issuer: Issuer 
-      ExpirationDate: ExpirationDate
-      }
+      Issuer: Issuer
+      ExpirationDate: ExpirationDate }
 
 type PaymentMethod =
     | Cash
@@ -44,9 +40,8 @@ let tenEurosViaCreditCard =
     { Method =
         CreditCard
             { CreditCardNumber = CreditCardNumber "1234-5678-9012-3456"
-              Issuer = Visa 
-              ExpirationDate = { Month = Jan; Year = Year 2022 }
-              }
+              Issuer = Visa
+              ExpirationDate = { Month = Jan; Year = Year 2022 } }
       Amount = Amount 10m
       Currency = EUR }
 
@@ -86,14 +81,12 @@ let aPaymentMethod =
     CreditCard
         { CreditCardNumber = CreditCardNumber "1234-5678-9012-3456"
           Issuer = Mastercard
-          ExpirationDate = { Month = Jan; Year = Year 2022 }
-          }
+          ExpirationDate = { Month = Jan; Year = Year 2022 } }
 
 let paidInvoice = payInvoice invoiceToPay aPaymentMethod
 
-let printPaidInvoce : PaidInvoice -> unit =
-    fun paidInvoice ->
-        printfn "Invoice %d paid on %A" paidInvoice.InvoiceId paidInvoice.PaidOn
+let printPaidInvoce: PaidInvoice -> unit =
+    fun paidInvoice -> printfn "Invoice %d paid on %A" paidInvoice.InvoiceId paidInvoice.PaidOn
 
 
 type User =
@@ -136,4 +129,5 @@ let anOrder =
 
 let lines = [ { ProductId = 1; Quantity = 2 }; { ProductId = 2; Quantity = 2 } ]
 
-let moreLines = { ProductId = 1; Quantity = 2 } :: { ProductId = 2; Quantity = 2 } :: []
+let moreLines =
+    { ProductId = 1; Quantity = 2 } :: { ProductId = 2; Quantity = 2 } :: []
