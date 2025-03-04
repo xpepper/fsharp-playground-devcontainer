@@ -53,3 +53,36 @@ let add2ThanSquare x =
 
 printfn "%i" (add2ThanSquare 3) // prints 25
 
+let addOne x = x + 1
+let printOption x =
+  match x with
+  | Some value -> printfn "Value is %i" value
+  | None -> printfn "No value"
+
+3 |> addOne |> Some |> printOption // prints "Value is 4"
+
+let peek = Option.map (fun n -> printfn "%i" n; n)
+let peekResult: Result<int,string> -> Result<int,string> = Result.map (fun n -> printfn "%i" n; n)
+let parseNumber (numberAsString: string) =
+    match System.Int32.TryParse numberAsString with
+    | true, number -> Some number
+    | _ -> None
+
+let safeDivide x y =
+    if y = 0 then Error "Cannot divide by zero"
+    else Ok (x / y)
+
+let optionToResult errMsg = function
+    | Some v -> Ok v
+    | None -> Error errMsg
+
+let printResult = function
+    | Ok v -> printfn "Result is %i" v
+    | Error errMsg -> printfn "Error: %s" errMsg
+
+"33"
+  |> parseNumber
+  |> Option.map addFour
+  |> optionToResult "Invalid number"
+  |> Result.bind (fun x -> safeDivide x 2)
+  |> printResult // prints "Result is 18"
