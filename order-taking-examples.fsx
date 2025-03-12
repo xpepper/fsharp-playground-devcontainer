@@ -17,3 +17,5 @@ match unitQuantity with
     let innerValue = UnitQuantity.value quantity
     printfn "Inner value is %i" innerValue
 | Error(message) -> printfn "Failure: %s" message
+
+let orderId = OrderId.create "1234567890"

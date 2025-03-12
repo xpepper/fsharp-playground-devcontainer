@@ -61,6 +61,7 @@ let printOption x =
 
 3 |> addOne |> Some |> printOption // prints "Value is 4"
 
+
 let peek = Option.map (fun n -> printfn "%i" n; n)
 let peekResult: Result<int,string> -> Result<int,string> = Result.map (fun n -> printfn "%i" n; n)
 let parseNumber (numberAsString: string) =
@@ -86,3 +87,8 @@ let printResult = function
   |> optionToResult "Invalid number"
   |> Result.bind (fun x -> safeDivide x 2)
   |> printResult // prints "Result is 18"
+
+
+
+
+

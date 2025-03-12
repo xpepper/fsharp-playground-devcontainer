@@ -1,5 +1,7 @@
 namespace OrderTaking.Domain
 
+open System
+
 [<Measure>]
 type kg
 
@@ -12,22 +14,40 @@ type ProductCode =
     | Widget of WidgetCode
     | Gizmo of GizmoCode
 
+module ProductCode =
+    let create (code: string) =
+        if code.StartsWith("W") && code.Length = 5 then
+            Widget(WidgetCode code)
+        elif code.StartsWith("G") && code.Length = 4 then
+            Gizmo(GizmoCode code)
+        else
+            failwith "Invalid product code"
+
 type UnitQuantity = private UnitQuantity of int
 
 module UnitQuantity =
     // Define a "smart constructor" for UnitQuantity​​
-    // int -> Result<UnitQuantity,string>​
+    // int -> Result<UnitQuantity,string>
     let create quantity =
         if quantity < 1 then
-            Error "Quantity must be at least 1"
+            failwith "Quantity must be at least 1"
         elif quantity > 1000 then
-            Error "Quantity must be at most 1000"
+            failwith "Quantity must be at most 1000"
         else
-            Ok(UnitQuantity quantity)
+            UnitQuantity quantity
 
     let value (UnitQuantity quantity) = quantity
 
 type KilogramQuantity = KilogramQuantity of decimal<kg> // A wrapper type. Between 0.05 and 100.0
+
+module KilogramQuantity =
+    let create quantity =
+        if quantity < 0.05M<kg> then
+            failwith "Quantity must be at least 0.05 kg"
+        elif quantity > 100.0M<kg> then
+            failwith "Quantity must be at most 100.0 kg"
+        else
+            KilogramQuantity quantity
 
 type OrderQuantity =
     | Units of UnitQuantity
@@ -35,8 +55,36 @@ type OrderQuantity =
 
 type Undefined = exn
 
-type OrderId = Undefined
-type OrderLineId = Undefined
+type OrderId = private OrderId of string
+
+module OrderId =
+    /// Define a "Smart constructor" for OrderId
+    let create str =
+        if String.IsNullOrEmpty(str) then
+            // use exceptions rather than Result for now
+            failwith "OrderId must not be null or empty"
+        elif str.Length > 50 then
+            failwith "OrderId must not be more than 50 chars"
+        else
+            OrderId str
+
+    /// Extract the inner value from an OrderId
+    let value (OrderId str) =   // unwrap in the parameter!
+        str
+
+type OrderLineId = private OrderLineId of string
+
+module OrderLineId =
+    let create str =
+        if String.IsNullOrEmpty(str) then
+            failwith "OrderLineId must not be null or empty"
+        elif str.Length > 50 then
+            failwith "OrderLineId must not be more than 50 chars"
+        else
+            OrderLineId str
+
+    let value (OrderLineId str) = str
+
 type CustomerId = Undefined
 
 type CustomerInfo = Undefined
@@ -45,10 +93,10 @@ type BillingAddress = Undefined
 type Price = Undefined
 type BillingAmount = Undefined
 
-// type NonEmptyList<'a> = {
-//     First: 'a
-//     Rest: 'a list
-// }
+type NonEmptyList<'a> = {
+    First: 'a
+    Rest: 'a list
+}
 
 type Order =
     { Id: OrderId
@@ -67,10 +115,22 @@ and OrderLine =
       Quantity: OrderQuantity
       Price: Price }
 
+type UnvalidatedOrderLine =
+    { OrderLineId: string
+      ProductCode: string
+      Quantity: int }
+
+type ValidatedOrderLine =
+    { OrderLineId: OrderLineId
+      ProductCode: ProductCode
+      Quantity: OrderQuantity }
+
 type UnvalidatedOrder =
     { OrderId: string
       CustomerInfo: string
-      ShippingAddress: string }
+      ShippingAddress: string
+      BillingAddress: string
+      ProductCode: ProductCode}
 
 type PlaceOrderEvents =
     { AcknowledgementSent: Undefined
@@ -122,3 +182,68 @@ module EmailVerificationService =
             match createVerifiedEmailAddress email with
             | Some email -> Ok email
             | None -> Error "Invalid email address"
+
+
+type CheckProductCodeExists = ProductCode -> bool
+type CheckAddressExists = string -> bool
+
+module examples =
+    let predicateToPassthru errorMessage f x =
+        if f x then
+            x
+        else
+            failwith errorMessage
+    let toProductCode (checkProductCodeExists:CheckProductCodeExists) productCode =
+        let checkProduct: ProductCode -> ProductCode =
+            let errorMsg = sprintf "Invalid: %A" productCode
+            predicateToPassthru errorMsg checkProductCodeExists
+
+        productCode
+        |> ProductCode.create
+        |> checkProduct
+
+    let toOrderQuantity productCode quantity =
+        match productCode with
+        | Widget _ ->
+            quantity
+            |> int // convert decimal to int
+            |> UnitQuantity.create // to UnitQuantity
+            |> OrderQuantity.Units // lift to OrderQuantity type
+        | Gizmo _ ->
+            quantity
+            |> decimal // convert int to decimal
+            |> (*) 1.0M<kg> // convert decimal to decimal<kg>
+            |> KilogramQuantity.create // to KilogramQuantity
+            |> OrderQuantity.Kilograms // lift to OrderQuantity type
+
+
+    let toValidatedOrderLine checkProductCodeExists (unvalidatedOrderLine: UnvalidatedOrderLine) =
+        let orderLineId =
+            unvalidatedOrderLine.OrderLineId
+                |> OrderLineId.create
+        let productCode =
+            unvalidatedOrderLine.ProductCode
+            |> toProductCode checkProductCodeExists // helper function
+        let quantity =
+            unvalidatedOrderLine.Quantity
+            |> toOrderQuantity productCode // helper function
+        let validatedOrderLine: ValidatedOrderLine = {
+            OrderLineId = orderLineId
+            ProductCode = productCode
+            Quantity = quantity
+        }
+        validatedOrderLine
+
+    // let validateOrder
+    //     checkProductCodeExists
+    //
+    //     unvalidatedOrder =
+    //         failwith "not implemented"
+
+    type ValidateOrder =
+        CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<Order, ValidationError list>
+
+    let validateOrder : ValidateOrder =
+        fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
+            failwith "not implemented"
+
