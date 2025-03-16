@@ -49,9 +49,17 @@ module KilogramQuantity =
         else
             KilogramQuantity quantity
 
+    let value (KilogramQuantity quantity) = quantity
+
 type OrderQuantity =
     | Units of UnitQuantity
     | Kilograms of KilogramQuantity
+
+module OrderQuantity =
+    let value quantity =
+        match quantity with
+        | Units unitQuantity -> UnitQuantity.value unitQuantity |> decimal
+        | Kilograms kilogramQuantity -> KilogramQuantity.value kilogramQuantity |> decimal
 
 type Undefined = exn
 
@@ -90,11 +98,24 @@ type CustomerId = Undefined
 type CustomerInfo = Undefined
 type ShippingAddress = Undefined
 type BillingAddress = Undefined
-type Price = Undefined
+type Price = Price of decimal
+
+module Price =
+    let create price = Price price
+    let multiply qty (Price p) = create (qty * p)
+
+    let value (Price price) = price
+
 type BillingAmount = BillingAmount of decimal
 
 module BillingAmount =
     let value (BillingAmount amount) = amount
+
+    let create amount = BillingAmount amount
+
+    let sumPrices prices =
+        let total = prices |> List.map Price.value |> List.sum
+        create total
 
 type NonEmptyList<'a> = { First: 'a; Rest: 'a list }
 
@@ -147,7 +168,8 @@ and ValidationError =
 
 // Domain - "verbs"
 
-type PlaceOrder = UnvalidatedOrder -> Result<PlaceOrderEvents, PlaceOrderError>
+// type PlaceOrder = UnvalidatedOrder -> Result<PlaceOrderEvents, PlaceOrderError>
+type PlaceOrder = UnvalidatedOrder -> PlaceOrderEvents
 
 module Order =
     let findOrderLine orderLineId orderLines =
@@ -184,7 +206,11 @@ module EmailVerificationService =
             | None -> Error "Invalid email address"
 
 
-type PricedOrderLine = Undefined
+type PricedOrderLine =
+    { OrderLineId: OrderLineId
+      ProductCode: ProductCode
+      Quantity: OrderQuantity
+      LinePrice: Price }
 
 type PricedOrder =
     { OrderId: OrderId
@@ -228,6 +254,24 @@ type PlaceOrderEvent =
 
 type CreateEvents = PricedOrder -> OrderAcknowledgmentSent option -> PlaceOrderEvent list
 
+type ValidatedOrder =
+    { OrderId: OrderId
+      CustomerInfo: CustomerInfo
+      ShippingAddress: ShippingAddress
+      BillingAddress: BillingAddress
+      OrderLines: ValidatedOrderLine list }
+
+type GetProductPrice = ProductCode -> Price
+type PriceOrder = GetProductPrice -> ValidatedOrder -> PricedOrder
+
+// type PlaceOrderWorkflow = PlaceOrder -> PlaceOrderEvent list
+type PlaceOrderWorkflow = UnvalidatedOrder -> PlaceOrderEvent list
+
+type CreateOrderAcknowledgmentLetter = PricedOrder -> HtmlString
+
+type AcknowledgeOrder =
+    CreateOrderAcknowledgmentLetter -> SendOrderAcknowledgment -> PricedOrder -> OrderAcknowledgmentSent option
+
 module examples =
     let predicateToPassthru errorMessage f x =
         if f x then x else failwith errorMessage
@@ -269,8 +313,9 @@ module examples =
 
         validatedOrderLine
 
-    type ValidateOrder =
-        CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<Order, ValidationError list>
+    // type ValidateOrder =
+    //     CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<Order, ValidationError list>
+    type ValidateOrder = CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> ValidatedOrder
 
     let validateOrder: ValidateOrder =
         fun checkProductCodeExists checkAddressExists unvalidatedOrder -> failwith "not implemented"
@@ -288,6 +333,55 @@ module examples =
         else
             None
 
+    let acknowledgeOrder: AcknowledgeOrder =
+        fun createAcknowledgmentLetter sendAcknowledgment pricedOrder ->
+            let letter = createAcknowledgmentLetter pricedOrder
+
+            let acknowledgment =
+                { EmailAddress = pricedOrder.CustomerInfo.EmailAddress
+                  Letter = letter }
+            // if the acknowledgment was successfully sent,
+            // return the corresponding event, else return None
+            match sendAcknowledgment acknowledgment with
+            | Sent ->
+                let event =
+                    { OrderId = pricedOrder.OrderId
+                      EmailAddress = pricedOrder.CustomerInfo.EmailAddress }
+
+                Some event
+            | NotSent -> None
+
+    let toPricedOrderLine getProductPrice (line: ValidatedOrderLine) : PricedOrderLine =
+        let qty = line.Quantity |> OrderQuantity.value
+        let price = line.ProductCode |> getProductPrice
+        let linePrice = price |> Price.multiply qty
+
+        { OrderLineId = line.OrderLineId
+          ProductCode = line.ProductCode
+          Quantity = line.Quantity
+          LinePrice = linePrice }
+
+    let priceOrder: PriceOrder =
+        fun getProductPrice validatedOrder ->
+            let lines =
+                validatedOrder.OrderLines |> List.map (toPricedOrderLine getProductPrice)
+
+            let amountToBill =
+                lines
+                |> List.map (fun line -> line.LinePrice)
+                // add them together as a BillingAmount
+                |> BillingAmount.sumPrices
+
+            let pricedOrder: PricedOrder =
+                { OrderId = validatedOrder.OrderId
+                  CustomerInfo = validatedOrder.CustomerInfo
+                  ShippingAddress = validatedOrder.ShippingAddress
+                  BillingAddress = validatedOrder.BillingAddress
+                  OrderLines = lines
+                  AmountToBill = amountToBill }
+
+            pricedOrder
+
     let createEvents: CreateEvents =
         fun pricedOrder acknowledgmentEventOpt ->
             let events1 = pricedOrder |> PlaceOrderEvent.OrderPlaced |> List.singleton
@@ -304,3 +398,36 @@ module examples =
                 |> Option.toList
 
             [ yield! events1; yield! events2; yield! events3 ]
+
+    let checkProductCodeExists: CheckProductCodeExists = fun _ -> true
+    let checkAddressExists: CheckAddressExists = fun _ -> true
+    let getProductPrice: GetProductPrice = fun _ -> Price.create 1.0M
+
+    let createAcknowledgmentLetter: CreateOrderAcknowledgmentLetter =
+        fun pricedOrder ->
+            let letter = sprintf "Thank you for your order %A" pricedOrder.OrderId
+            HtmlString letter
+
+    let sendAcknowledgment: SendOrderAcknowledgment =
+        fun acknowledgment ->
+            printfn "Sending acknowledgment to %A" acknowledgment.EmailAddress
+            Sent
+
+    let enrichWithAcknowledgeOrder acknowledgeOrder pricedOrder =
+        let acknowledgment = acknowledgeOrder pricedOrder
+        (pricedOrder, acknowledgment)
+
+    let placeOrder: PlaceOrderWorkflow =
+        // set up local versions of the pipeline stages using partial application to bake-in dependencies
+        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+        let priceOrder = priceOrder getProductPrice
+
+        let acknowledgeOrder =
+            acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
+
+        fun unvalidatedOrder ->
+            unvalidatedOrder
+            |> validateOrder
+            |> priceOrder
+            |> acknowledgeOrder
+            |> createEvents
