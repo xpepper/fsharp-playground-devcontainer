@@ -69,7 +69,7 @@ module OrderId =
             OrderId str
 
     /// Extract the inner value from an OrderId
-    let value (OrderId str) =   // unwrap in the parameter!
+    let value (OrderId str) = // unwrap in the parameter!
         str
 
 type OrderLineId = private OrderLineId of string
@@ -91,12 +91,12 @@ type CustomerInfo = Undefined
 type ShippingAddress = Undefined
 type BillingAddress = Undefined
 type Price = Undefined
-type BillingAmount = Undefined
+type BillingAmount = BillingAmount of decimal
 
-type NonEmptyList<'a> = {
-    First: 'a
-    Rest: 'a list
-}
+module BillingAmount =
+    let value (BillingAmount amount) = amount
+
+type NonEmptyList<'a> = { First: 'a; Rest: 'a list }
 
 type Order =
     { Id: OrderId
@@ -130,7 +130,7 @@ type UnvalidatedOrder =
       CustomerInfo: string
       ShippingAddress: string
       BillingAddress: string
-      ProductCode: ProductCode}
+      ProductCode: ProductCode }
 
 type PlaceOrderEvents =
     { AcknowledgementSent: Undefined
@@ -184,23 +184,60 @@ module EmailVerificationService =
             | None -> Error "Invalid email address"
 
 
+type PricedOrderLine = Undefined
+
+type PricedOrder =
+    { OrderId: OrderId
+      CustomerInfo: CustomerInfo
+      ShippingAddress: ShippingAddress
+      BillingAddress: BillingAddress
+      OrderLines: PricedOrderLine list
+      AmountToBill: BillingAmount }
+
 type CheckProductCodeExists = ProductCode -> bool
 type CheckAddressExists = string -> bool
 
+type HtmlString = HtmlString of string
+type EmailAddress = EmailAddress of string
+
+type OrderAcknowledgment =
+    { EmailAddress: EmailAddress
+      Letter: HtmlString }
+
+type OrderPlaced = PricedOrder
+
+type BillableOrderPlaced =
+    { OrderId: OrderId
+      BillingAddress: BillingAddress
+      AmountToBill: BillingAmount }
+
+type SendResult =
+    | Sent
+    | NotSent
+
+type SendOrderAcknowledgment = OrderAcknowledgment -> SendResult
+
+type OrderAcknowledgmentSent =
+    { OrderId: OrderId
+      EmailAddress: EmailAddress }
+
+type PlaceOrderEvent =
+    | OrderPlaced of OrderPlaced
+    | BillableOrderPlaced of BillableOrderPlaced
+    | AcknowledgmentSent of OrderAcknowledgmentSent
+
+type CreateEvents = PricedOrder -> OrderAcknowledgmentSent option -> PlaceOrderEvent list
+
 module examples =
     let predicateToPassthru errorMessage f x =
-        if f x then
-            x
-        else
-            failwith errorMessage
-    let toProductCode (checkProductCodeExists:CheckProductCodeExists) productCode =
+        if f x then x else failwith errorMessage
+
+    let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
         let checkProduct: ProductCode -> ProductCode =
             let errorMsg = sprintf "Invalid: %A" productCode
             predicateToPassthru errorMsg checkProductCodeExists
 
-        productCode
-        |> ProductCode.create
-        |> checkProduct
+        productCode |> ProductCode.create |> checkProduct
 
     let toOrderQuantity productCode quantity =
         match productCode with
@@ -218,32 +255,52 @@ module examples =
 
 
     let toValidatedOrderLine checkProductCodeExists (unvalidatedOrderLine: UnvalidatedOrderLine) =
-        let orderLineId =
-            unvalidatedOrderLine.OrderLineId
-                |> OrderLineId.create
-        let productCode =
-            unvalidatedOrderLine.ProductCode
-            |> toProductCode checkProductCodeExists // helper function
-        let quantity =
-            unvalidatedOrderLine.Quantity
-            |> toOrderQuantity productCode // helper function
-        let validatedOrderLine: ValidatedOrderLine = {
-            OrderLineId = orderLineId
-            ProductCode = productCode
-            Quantity = quantity
-        }
-        validatedOrderLine
+        let orderLineId = unvalidatedOrderLine.OrderLineId |> OrderLineId.create
 
-    // let validateOrder
-    //     checkProductCodeExists
-    //
-    //     unvalidatedOrder =
-    //         failwith "not implemented"
+        let productCode =
+            unvalidatedOrderLine.ProductCode |> toProductCode checkProductCodeExists // helper function
+
+        let quantity = unvalidatedOrderLine.Quantity |> toOrderQuantity productCode // helper function
+
+        let validatedOrderLine: ValidatedOrderLine =
+            { OrderLineId = orderLineId
+              ProductCode = productCode
+              Quantity = quantity }
+
+        validatedOrderLine
 
     type ValidateOrder =
         CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<Order, ValidationError list>
 
-    let validateOrder : ValidateOrder =
-        fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
-            failwith "not implemented"
+    let validateOrder: ValidateOrder =
+        fun checkProductCodeExists checkAddressExists unvalidatedOrder -> failwith "not implemented"
 
+    let createBillingEvent (placedOrder: PricedOrder) : BillableOrderPlaced option =
+        let billingAmount = placedOrder.AmountToBill |> BillingAmount.value
+
+        if billingAmount > 0M then
+            let order =
+                { OrderId = placedOrder.OrderId
+                  BillingAddress = placedOrder.BillingAddress
+                  AmountToBill = placedOrder.AmountToBill }
+
+            Some order
+        else
+            None
+
+    let createEvents: CreateEvents =
+        fun pricedOrder acknowledgmentEventOpt ->
+            let events1 = pricedOrder |> PlaceOrderEvent.OrderPlaced |> List.singleton
+
+            let events2 =
+                acknowledgmentEventOpt
+                |> Option.map PlaceOrderEvent.AcknowledgmentSent
+                |> Option.toList
+
+            let events3 =
+                pricedOrder
+                |> createBillingEvent
+                |> Option.map PlaceOrderEvent.BillableOrderPlaced
+                |> Option.toList
+
+            [ yield! events1; yield! events2; yield! events3 ]
