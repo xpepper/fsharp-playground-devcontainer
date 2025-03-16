@@ -413,7 +413,7 @@ module examples =
             printfn "Sending acknowledgment to %A" acknowledgment.EmailAddress
             Sent
 
-    let enrichWithAcknowledgeOrder acknowledgeOrder pricedOrder =
+    let withAcknowledgeOrder acknowledgeOrder (pricedOrder: PricedOrder) =
         let acknowledgment = acknowledgeOrder pricedOrder
         (pricedOrder, acknowledgment)
 
@@ -429,5 +429,5 @@ module examples =
             unvalidatedOrder
             |> validateOrder
             |> priceOrder
-            |> acknowledgeOrder
-            |> createEvents
+            |> withAcknowledgeOrder acknowledgeOrder
+            |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
