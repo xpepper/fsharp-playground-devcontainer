@@ -95,9 +95,21 @@ module OrderLineId =
 
 type CustomerId = Undefined
 
-type CustomerInfo = Undefined
-type ShippingAddress = Undefined
-type BillingAddress = Undefined
+type CustomerInfo = CustomerInfo of string
+
+module CustomerInfo =
+    let create str = CustomerInfo str
+    let value (CustomerInfo str) = str
+type ShippingAddress = ShippingAddress of string
+type BillingAddress = BillingAddress of string
+
+module ShippingAddress =
+    let create str = ShippingAddress str
+    let value (ShippingAddress str) = str
+
+module BillingAddress =
+    let create str = BillingAddress str
+    let value (BillingAddress str) = str
 type Price = Price of decimal
 
 module Price =
@@ -151,7 +163,7 @@ type UnvalidatedOrder =
       CustomerInfo: string
       ShippingAddress: string
       BillingAddress: string
-      ProductCode: ProductCode }
+      OrderLines: UnvalidatedOrderLine list }
 
 type PlaceOrderEvents =
     { AcknowledgementSent: Undefined
@@ -193,11 +205,16 @@ module Order =
 
         newOrder
 
+type UnverifiedEmailAddress = UnverifiedEmailAddress of string
+
 module EmailVerificationService =
     type VerifiedEmailAddress = private Email of string
     type verify = UnverifiedEmailAddress -> Result<VerifiedEmailAddress, string>
 
     let getEmail = fun (Email email) -> email
+
+    let createVerifiedEmailAddress (UnverifiedEmailAddress email) =
+        if email.Contains("@") then Some(Email email) else None
 
     let verifyEmail: UnverifiedEmailAddress -> Result<VerifiedEmailAddress, string> =
         fun email ->
@@ -318,7 +335,32 @@ module examples =
     type ValidateOrder = CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> ValidatedOrder
 
     let validateOrder: ValidateOrder =
-        fun checkProductCodeExists checkAddressExists unvalidatedOrder -> failwith "not implemented"
+        fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
+            let orderId = unvalidatedOrder.OrderId |> OrderId.create
+            let customerInfo = unvalidatedOrder.CustomerInfo |> CustomerInfo.create
+            let shippingAddress = unvalidatedOrder.ShippingAddress |> ShippingAddress.create
+            let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
+
+            let validatedOrderLines =
+                unvalidatedOrder.OrderLines
+                |> List.map (toValidatedOrderLine checkProductCodeExists)
+
+            let amountToBill =
+                validatedOrderLines
+                |> List.map (fun line -> line.Quantity |> OrderQuantity.value)
+                |> List.sumBy (fun qty -> qty)
+
+                // add them together as a BillingAmount
+                |> BillingAmount.create
+
+            let validatedOrder: ValidatedOrder =
+                { OrderId = orderId
+                  CustomerInfo = customerInfo
+                  ShippingAddress = shippingAddress
+                  BillingAddress = billingAddress
+                  OrderLines = validatedOrderLines }
+
+            validatedOrder
 
     let createBillingEvent (placedOrder: PricedOrder) : BillableOrderPlaced option =
         let billingAmount = placedOrder.AmountToBill |> BillingAmount.value
@@ -399,6 +441,32 @@ module examples =
 
             [ yield! events1; yield! events2; yield! events3 ]
 
+    let withAcknowledgeOrder acknowledgeOrder (pricedOrder: PricedOrder) =
+        let acknowledgment = acknowledgeOrder pricedOrder
+        (pricedOrder, acknowledgment)
+
+    let placeOrder
+        checkProductCodeExists
+        checkAddressExists
+        getProductPrice
+        createAcknowledgmentLetter
+        sendAcknowledgment
+        : PlaceOrderWorkflow =
+        // set up local versions of the pipeline stages using partial application to bake-in dependencies
+            let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+            let priceOrder = priceOrder getProductPrice
+
+            let acknowledgeOrder =
+                acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
+
+            fun unvalidatedOrder ->
+                unvalidatedOrder
+                |> validateOrder
+                |> priceOrder
+                |> withAcknowledgeOrder acknowledgeOrder
+                |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
+
+    // our "composition root" function
     let checkProductCodeExists: CheckProductCodeExists = fun _ -> true
     let checkAddressExists: CheckAddressExists = fun _ -> true
     let getProductPrice: GetProductPrice = fun _ -> Price.create 1.0M
@@ -413,21 +481,23 @@ module examples =
             printfn "Sending acknowledgment to %A" acknowledgment.EmailAddress
             Sent
 
-    let withAcknowledgeOrder acknowledgeOrder (pricedOrder: PricedOrder) =
-        let acknowledgment = acknowledgeOrder pricedOrder
-        (pricedOrder, acknowledgment)
+    let placeOrder =
+        placeOrder
+            checkProductCodeExists
+            checkAddressExists
+            getProductPrice
+            createAcknowledgmentLetter
+            sendAcknowledgment
 
-    let placeOrder: PlaceOrderWorkflow =
-        // set up local versions of the pipeline stages using partial application to bake-in dependencies
-        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-        let priceOrder = priceOrder getProductPrice
 
-        let acknowledgeOrder =
-            acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
-
-        fun unvalidatedOrder ->
-            unvalidatedOrder
-            |> validateOrder
-            |> priceOrder
-            |> withAcknowledgeOrder acknowledgeOrder
-            |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
+    placeOrder {
+        OrderId = "123"
+        CustomerInfo = "John Doe"
+        ShippingAddress = "123 Main St"
+        BillingAddress = "456 Elm St"
+        OrderLines = [
+            { OrderLineId = "1"; ProductCode = "W1234"; Quantity = 10 }
+            { OrderLineId = "2"; ProductCode = "G123"; Quantity = 5 }
+        ]
+    }
+    |> printfn "%A"
