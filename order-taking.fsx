@@ -499,7 +499,8 @@ module examples =
 
     let validateOrderAdapted input=
         let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-        validateOrder input
+        input
+        |> validateOrder
         |> Result.mapError PlaceOrderError.Validation
 
     let priceOrderAdapted input =
