@@ -509,6 +509,17 @@ module examples =
         |> priceOrder
         |> Result.mapError PlaceOrderError.Pricing
 
+    let placeOrderAdapted unvalidatedOrder =
+        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+        let priceOrder = priceOrder getProductPrice
+
+        let validateOrder = validateOrder >> Result.mapError PlaceOrderError.Validation
+        let priceOrder = priceOrder >> Result.mapError PlaceOrderError.Pricing
+
+        unvalidatedOrder
+        |> validateOrder
+        |> Result.bind priceOrder
+        // ...
 
     placeOrder {
         OrderId = "123"
