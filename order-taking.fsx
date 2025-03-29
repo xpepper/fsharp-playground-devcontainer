@@ -170,10 +170,17 @@ type PlaceOrderEvents =
       OrderPlaced: Undefined
       BillableOrderPlaced: Undefined }
 
-type PlaceOrderError =
-    | ValidationError of ValidationError list
+type PricingError =
     | ProductNotFoundError of ProductCode
+    | InvalidOrderLineError of OrderLineId
 
+type PlaceOrderError =
+    | Validation of ValidationError
+    | Pricing of PricingError
+
+// type PlaceOrderError =
+//     | ValidationError of ValidationError list
+//     | ProductNotFoundError of ProductCode
 and ValidationError =
     { FieldName: string
       ErrorDescription: string }
@@ -279,7 +286,9 @@ type ValidatedOrder =
       OrderLines: ValidatedOrderLine list }
 
 type GetProductPrice = ProductCode -> Price
-type PriceOrder = GetProductPrice -> ValidatedOrder -> PricedOrder
+
+// type PriceOrder = GetProductPrice -> ValidatedOrder -> PricedOrder
+type PriceOrder = GetProductPrice -> ValidatedOrder -> Result<PricedOrder, PricingError>
 
 // type PlaceOrderWorkflow = PlaceOrder -> PlaceOrderEvent list
 type PlaceOrderWorkflow = UnvalidatedOrder -> PlaceOrderEvent list
@@ -330,9 +339,8 @@ module examples =
 
         validatedOrderLine
 
-    // type ValidateOrder =
-    //     CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<Order, ValidationError list>
-    type ValidateOrder = CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> ValidatedOrder
+    type ValidateOrder =
+        CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<ValidatedOrder, ValidationError>
 
     let validateOrder: ValidateOrder =
         fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
@@ -360,7 +368,7 @@ module examples =
                   BillingAddress = billingAddress
                   OrderLines = validatedOrderLines }
 
-            validatedOrder
+            Ok validatedOrder
 
     let createBillingEvent (placedOrder: PricedOrder) : BillableOrderPlaced option =
         let billingAmount = placedOrder.AmountToBill |> BillingAmount.value
@@ -422,7 +430,7 @@ module examples =
                   OrderLines = lines
                   AmountToBill = amountToBill }
 
-            pricedOrder
+            Ok pricedOrder
 
     let createEvents: CreateEvents =
         fun pricedOrder acknowledgmentEventOpt ->
@@ -488,6 +496,17 @@ module examples =
             getProductPrice
             createAcknowledgmentLetter
             sendAcknowledgment
+
+    let validateOrderAdapted input=
+        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+        validateOrder input
+        |> Result.mapError PlaceOrderError.Validation
+
+    let priceOrderAdapted input =
+        let priceOrder = priceOrder getProductPrice
+        input
+        |> priceOrder
+        |> Result.mapError PlaceOrderError.Pricing
 
 
     placeOrder {
