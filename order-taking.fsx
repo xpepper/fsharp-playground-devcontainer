@@ -497,14 +497,14 @@ module examples =
             createAcknowledgmentLetter
             sendAcknowledgment
 
-    let validateOrderAdapted input=
-        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+    let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+    let validateOrder input=
         input
         |> validateOrder
         |> Result.mapError PlaceOrderError.Validation
 
-    let priceOrderAdapted input =
-        let priceOrder = priceOrder getProductPrice
+    let priceOrder = priceOrder getProductPrice
+    let priceOrder input =
         input
         |> priceOrder
         |> Result.mapError PlaceOrderError.Pricing
@@ -513,8 +513,8 @@ module examples =
         let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
 
         unvalidatedOrder
-        |> validateOrderAdapted
-        |> Result.bind priceOrderAdapted
+        |> validateOrder
+        |> Result.bind priceOrder
         |> Result.map acknowledgeOrder
         |> Result.map createEvents
 
