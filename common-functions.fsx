@@ -17,8 +17,6 @@ module Result =
         | Error failure -> Error (liftUpFn failure)
 
 module Examples =
-    open Result
-
     type AError = AError of string
     type BError = BError of string
     type CError = CError of string
