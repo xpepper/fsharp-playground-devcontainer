@@ -498,7 +498,7 @@ module examples =
             sendAcknowledgment
 
     let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-    let validateOrder input=
+    let validateOrder input =
         input
         |> validateOrder
         |> Result.mapError PlaceOrderError.Validation
@@ -509,8 +509,8 @@ module examples =
         |> priceOrder
         |> Result.mapError PlaceOrderError.Pricing
 
+    let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
     let placeOrderAdapted unvalidatedOrder =
-        let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
 
         unvalidatedOrder
         |> validateOrder
