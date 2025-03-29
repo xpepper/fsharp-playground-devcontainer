@@ -510,16 +510,13 @@ module examples =
         |> Result.mapError PlaceOrderError.Pricing
 
     let placeOrderAdapted unvalidatedOrder =
-        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-        let priceOrder = priceOrder getProductPrice
-
-        let validateOrder = validateOrder >> Result.mapError PlaceOrderError.Validation
-        let priceOrder = priceOrder >> Result.mapError PlaceOrderError.Pricing
+        let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
 
         unvalidatedOrder
-        |> validateOrder
-        |> Result.bind priceOrder
-        // ...
+        |> validateOrderAdapted
+        |> Result.bind priceOrderAdapted
+        |> Result.map acknowledgeOrder
+        |> Result.map createEvents
 
     placeOrder {
         OrderId = "123"
