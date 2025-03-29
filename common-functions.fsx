@@ -16,54 +16,57 @@ module Result =
         | Ok success -> Ok success
         | Error failure -> Error (liftUpFn failure)
 
-type AError = AError of string
-type BError = BError of string
-type CError = CError of string
+module Examples =
+    open Result
 
-type FunctionA = int -> Result<bool, AError>
-type FunctionB = bool -> Result<string, BError>
-type FunctionC = string -> Result<char list, CError>
+    type AError = AError of string
+    type BError = BError of string
+    type CError = CError of string
 
-let functionA: FunctionA =
-    fun x ->
-        if x > 0 then
-            Ok (x % 2 = 0)
-        else
-            Error (AError "Input must be greater than 0.")
+    type FunctionA = int -> Result<bool, AError>
+    type FunctionB = bool -> Result<string, BError>
+    type FunctionC = string -> Result<char list, CError>
 
-let functionB: FunctionB =
-    fun x ->
-        if x then
-            Ok "Input is true."
-        else
-            Error (BError "Input is false.")
+    let functionA: FunctionA =
+        fun x ->
+            if x > 0 then
+                Ok (x % 2 = 0)
+            else
+                Error (AError "Input must be greater than 0.")
 
-let functionC: FunctionC =
-    fun x ->
-        if x.Length > 0 then
-            Ok (List.ofSeq x)
-        else
-            Error (CError "Input string is empty.")
+    let functionB: FunctionB =
+        fun x ->
+            if x then
+                Ok "Input is true."
+            else
+                Error (BError "Input is false.")
 
-type CommonErrorType =
-    | AErrorCase of AError
-    | BErrorCase of BError
-    | CErrorCase of CError
+    let functionC: FunctionC =
+        fun x ->
+            if x.Length > 0 then
+                Ok (List.ofSeq x)
+            else
+                Error (CError "Input string is empty.")
 
-let functionAWithCommonError input =
-    functionA input
-    |> Result.mapError (fun (aError) -> AErrorCase aError)
+    type CommonErrorType =
+        | AErrorCase of AError
+        | BErrorCase of BError
+        | CErrorCase of CError
 
-let functionBWithCommonError input =
-    functionB input
-    |> Result.mapError (fun (bError) -> BErrorCase bError)
+    let functionAWithCommonError input =
+        functionA input
+        |> Result.mapError (fun (aError) -> AErrorCase aError)
 
-let functionCWithCommonError input =
-    functionC input
-    |> Result.mapError (fun (cError) -> CErrorCase cError)
+    let functionBWithCommonError input =
+        functionB input
+        |> Result.mapError (fun (bError) -> BErrorCase bError)
 
-let composed input =
-    input
-    |> functionAWithCommonError
-    |> Result.bind functionBWithCommonError
-    |> Result.bind functionCWithCommonError
+    let functionCWithCommonError input =
+        functionC input
+        |> Result.mapError (fun (cError) -> CErrorCase cError)
+
+    let composed input =
+        input
+        |> functionAWithCommonError
+        |> Result.bind functionBWithCommonError
+        |> Result.bind functionCWithCommonError
