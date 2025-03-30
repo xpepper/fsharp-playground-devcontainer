@@ -498,23 +498,22 @@ module examples =
             sendAcknowledgment
 
     let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-    let validateOrder input =
+    let validateOrderAdapted input =
         input
         |> validateOrder
         |> Result.mapError PlaceOrderError.Validation
 
     let priceOrder = priceOrder getProductPrice
-    let priceOrder input =
+    let priceOrderAdapted input =
         input
         |> priceOrder
         |> Result.mapError PlaceOrderError.Pricing
 
     let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
-    let placeOrderAdapted unvalidatedOrder =
-
+    let placeOrder unvalidatedOrder =
         unvalidatedOrder
-        |> validateOrder
-        |> Result.bind priceOrder
+        |> validateOrderAdapted
+        |> Result.bind priceOrderAdapted
         |> Result.map acknowledgeOrder
         |> Result.map createEvents
 
