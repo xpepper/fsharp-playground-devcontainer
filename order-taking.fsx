@@ -514,8 +514,10 @@ module examples =
         unvalidatedOrder
         |> validateOrderAdapted
         |> Result.bind priceOrderAdapted
-        |> Result.map acknowledgeOrder
-        |> Result.map createEvents
+        |> Result.map (fun pricedOrder ->
+            let acknowledgment = acknowledgeOrder pricedOrder
+            createEvents pricedOrder acknowledgment
+        )
 
     placeOrder {
         OrderId = "123"
