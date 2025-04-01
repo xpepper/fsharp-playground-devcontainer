@@ -1,3 +1,5 @@
+namespace CommonFunctions
+
 module Result =
     let bind switchFn =
         fun twoTrackInput->
@@ -16,7 +18,18 @@ module Result =
         | Ok success -> Ok success
         | Error failure -> Error (liftUpFn failure)
 
+module Common =
+    let tee (f: 'a -> unit) x =
+        f x
+        x
+
+    let also (f: 'a -> unit)  =
+        Result.map (tee f)
+
+
 module Examples =
+    open Common
+
     type AError = AError of string
     type BError = BError of string
     type CError = CError of string
@@ -68,3 +81,14 @@ module Examples =
         |> functionAWithCommonError
         |> Result.bind functionBWithCommonError
         |> Result.bind functionCWithCommonError
+
+    let processValue (n: int) =
+        Ok n
+        |> also (printfn "Processing value: %d")
+        |> fun v ->
+            match v with
+            | Ok value when value > 0 -> Ok (value * 2)
+            | Ok _ -> Error "Value must be greater than 0."
+            | Error _ -> Error "An error occurred."
+
+    processValue 33

@@ -2,6 +2,8 @@ namespace OrderTaking.Domain
 
 open System
 
+#load "common-functions.fsx"
+
 [<Measure>]
 type kg
 
@@ -174,9 +176,21 @@ type PricingError =
     | ProductNotFoundError of ProductCode
     | InvalidOrderLineError of OrderLineId
 
+
+type ServiceInfo = {
+    Name : string
+    Endpoint: Uri
+}
+
+type RemoteServiceError = {
+    Service : ServiceInfo
+    Exception: System.Exception
+}
+
 type PlaceOrderError =
     | Validation of ValidationError
     | Pricing of PricingError
+    | RemoteService of RemoteServiceError
 
 // type PlaceOrderError =
 //     | ValidationError of ValidationError list
@@ -299,6 +313,8 @@ type AcknowledgeOrder =
     CreateOrderAcknowledgmentLetter -> SendOrderAcknowledgment -> PricedOrder -> OrderAcknowledgmentSent option
 
 module examples =
+    open CommonFunctions.Common
+
     let predicateToPassthru errorMessage f x =
         if f x then x else failwith errorMessage
 
@@ -479,6 +495,29 @@ module examples =
     let checkAddressExists: CheckAddressExists = fun _ -> true
     let getProductPrice: GetProductPrice = fun _ -> Price.create 1.0M
 
+    let serviceInfo = {
+        Name = "AddressCheckingService"
+        Endpoint = Uri("http://address-checking-service")
+    }
+
+    let serviceExceptionAdapter serviceInfo serviceFn x =
+        try
+            Ok (serviceFn x)
+        with
+        | :? TimeoutException as ex ->
+            Error { Service = serviceInfo; Exception = ex }
+        | :? System.Net.WebException as ex ->
+            Error { Service = serviceInfo; Exception = ex }
+
+    let checkAddressExistsR address =
+        let adaptedService =
+            serviceExceptionAdapter serviceInfo checkAddressExists
+
+        address
+            |> adaptedService
+            |> Result.mapError RemoteService
+
+
     let createAcknowledgmentLetter: CreateOrderAcknowledgmentLetter =
         fun pricedOrder ->
             let letter = sprintf "Thank you for your order %A" pricedOrder.OrderId
@@ -514,6 +553,7 @@ module examples =
         unvalidatedOrder
         |> validateOrderAdapted
         |> Result.bind priceOrderAdapted
+        |> also (printfn "Processing value: %A")
         |> Result.map (fun pricedOrder ->
             let acknowledgment = acknowledgeOrder pricedOrder
             createEvents pricedOrder acknowledgment
