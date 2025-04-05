@@ -314,6 +314,7 @@ type AcknowledgeOrder =
 
 module examples =
     open CommonFunctions.Common
+    open CommonFunctions
 
     let predicateToPassthru errorMessage f x =
         if f x then x else failwith errorMessage
@@ -558,6 +559,19 @@ module examples =
             let acknowledgment = acknowledgeOrder pricedOrder
             createEvents pricedOrder acknowledgment
         )
+
+    let placeOrder2 unvalidatedOrder =
+        result {
+            let! validatedOrder =
+                validateOrder unvalidatedOrder
+                |> Result.mapError PlaceOrderError.Validation
+            let! pricedOrder =
+                priceOrder validatedOrder
+                |> Result.mapError PlaceOrderError.Pricing
+            let acknowledgment = acknowledgeOrder pricedOrder
+            return createEvents pricedOrder acknowledgment
+        }
+
 
     placeOrder {
         OrderId = "123"
