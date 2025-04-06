@@ -199,6 +199,14 @@ type RemoteServiceError =
     { Service: ServiceInfo
       Exception: System.Exception }
 
+type ValidationError =
+    { FieldName: string
+      ErrorDescription: string }
+
+module ValidationError =
+    let mapErrorWith fieldName =
+            Result.mapError (fun e -> { FieldName = fieldName; ErrorDescription = e })
+
 type PlaceOrderError =
     | Validation of ValidationError
     | Pricing of PricingError
@@ -207,9 +215,7 @@ type PlaceOrderError =
 // type PlaceOrderError =
 //     | ValidationError of ValidationError list
 //     | ProductNotFoundError of ProductCode
-and ValidationError =
-    { FieldName: string
-      ErrorDescription: string }
+
 
 // Domain - "verbs"
 
@@ -384,17 +390,17 @@ module examples =
                 let! orderId =
                     unvalidatedOrder.OrderId
                     |> OrderId.create
-                    |> Result.mapError(fun e -> { FieldName = "OrderId"; ErrorDescription = e })
+                    |> ValidationError.mapErrorWith "OrderId"
 
                 let! customerInfo =
                     unvalidatedOrder.CustomerInfo
                     |> CustomerInfo.create
-                    |> Result.mapError(fun e -> { FieldName = "CustomerInfo"; ErrorDescription = e })
+                    |> ValidationError.mapErrorWith "CustomerInfo"
 
                 let! shippingAddress =
                     unvalidatedOrder.ShippingAddress
                     |> toAddress checkAddressExists
-                    |> Result.mapError(fun e -> { FieldName = "ShippingAddress"; ErrorDescription = e })
+                    |> ValidationError.mapErrorWith "ShippingAddress"
 
                 let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
 
