@@ -19,11 +19,11 @@ type ProductCode =
 module ProductCode =
     let create (code: string) =
         if code.StartsWith("W") && code.Length = 5 then
-            Widget(WidgetCode code)
+            Ok(Widget(WidgetCode code))
         elif code.StartsWith("G") && code.Length = 4 then
-            Gizmo(GizmoCode code)
+            Ok(Gizmo(GizmoCode code))
         else
-            failwith "Invalid product code"
+            Error "Invalid product code"
 
 type UnitQuantity = private UnitQuantity of int
 
@@ -339,11 +339,10 @@ module examples =
                 let msg = sprintf "Invalid: %A" productCode
                 Error (ValidationError msg)
 
-        let checkProduct: ProductCode -> ProductCode =
-            let errorMsg = sprintf "Invalid: %A" productCode
-            predicateToPassthru errorMsg checkProductCodeExists
-
-        productCode |> ProductCode.create |> checkProduct
+        productCode
+            |> ProductCode.create
+            |> Result.mapError ValidationError // convert creation error into ValidationError
+            |> Result.bind checkProduct
 
     let toOrderQuantity productCode quantity =
         match productCode with
@@ -359,21 +358,22 @@ module examples =
             |> KilogramQuantity.create // to KilogramQuantity
             |> OrderQuantity.Kilograms // lift to OrderQuantity type
 
-
-    let toValidatedOrderLine checkProductCodeExists (unvalidatedOrderLine: UnvalidatedOrderLine) =
-        let orderLineId = unvalidatedOrderLine.OrderLineId |> OrderLineId.create
-
-        let productCode =
-            unvalidatedOrderLine.ProductCode |> toProductCode checkProductCodeExists // helper function
-
-        let quantity = unvalidatedOrderLine.Quantity |> toOrderQuantity productCode // helper function
-
-        let validatedOrderLine: ValidatedOrderLine =
-            { OrderLineId = orderLineId
-              ProductCode = productCode
-              Quantity = quantity }
-
-        validatedOrderLine
+    let toValidatedOrderLine checkProductExists (unvalidatedOrderLine:UnvalidatedOrderLine): Result<ValidatedOrderLine, ValidationError> =
+        result {
+            let orderLineId = unvalidatedOrderLine.OrderLineId |> OrderLineId.create
+            let! productCode =
+                unvalidatedOrderLine.ProductCode
+                |> toProductCode checkProductExists
+            let quantity =
+                unvalidatedOrderLine.Quantity
+                |> toOrderQuantity productCode
+            let validatedOrderLine = {
+                OrderLineId = orderLineId
+                ProductCode = productCode
+                Quantity = quantity
+                }
+            return validatedOrderLine
+        }
 
     let toAddress checkAddressExists address =
         let checkAddress: string -> string =
