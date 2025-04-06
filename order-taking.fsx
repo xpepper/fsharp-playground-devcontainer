@@ -199,13 +199,7 @@ type RemoteServiceError =
     { Service: ServiceInfo
       Exception: System.Exception }
 
-type ValidationError =
-    { FieldName: string
-      ErrorDescription: string }
-
-module ValidationError =
-    let mapErrorWith fieldName =
-            Result.mapError (fun e -> { FieldName = fieldName; ErrorDescription = e })
+type ValidationError = ValidationError of string
 
 type PlaceOrderError =
     | Validation of ValidationError
@@ -338,6 +332,13 @@ module examples =
         if f x then x else failwith errorMessage
 
     let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
+        let checkProduct productCode  =
+            if checkProductCodeExists productCode then
+                Ok productCode
+            else
+                let msg = sprintf "Invalid: %A" productCode
+                Error (ValidationError msg)
+
         let checkProduct: ProductCode -> ProductCode =
             let errorMsg = sprintf "Invalid: %A" productCode
             predicateToPassthru errorMsg checkProductCodeExists
@@ -390,17 +391,17 @@ module examples =
                 let! orderId =
                     unvalidatedOrder.OrderId
                     |> OrderId.create
-                    |> ValidationError.mapErrorWith "OrderId"
+                    |> Result.mapError ValidationError
 
                 let! customerInfo =
                     unvalidatedOrder.CustomerInfo
                     |> CustomerInfo.create
-                    |> ValidationError.mapErrorWith "CustomerInfo"
+                    |> Result.mapError ValidationError
 
                 let! shippingAddress =
                     unvalidatedOrder.ShippingAddress
                     |> toAddress checkAddressExists
-                    |> ValidationError.mapErrorWith "ShippingAddress"
+                    |> Result.mapError ValidationError
 
                 let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
 
