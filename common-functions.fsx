@@ -18,6 +18,17 @@ module Result =
         | Ok success -> Ok success
         | Error failure -> Error(liftUpFn failure)
 
+    let prepend (firstResult: Result<'a, 'e>) (restOfResults: Result<'a list, 'e>) : Result<'a list, 'e> =
+        match (firstResult, restOfResults) with
+        | Ok first, Ok rest -> Ok(first :: rest)
+        | Error first, _ -> Error first
+        | _, Error rest -> Error rest
+
+    let sequence (aListOfResults: Result<'a,'e> list): Result<'a list, 'e> =
+        let initialValue = Ok []
+        List.foldBack prepend aListOfResults initialValue
+
+
 [<AutoOpen>]
 module ResultComputationExpression =
 
@@ -25,48 +36,48 @@ module ResultComputationExpression =
         member this.Return(x) = Ok x
         member this.Bind(x, f) = Result.bind f x
 
-        // member this.ReturnFrom(x) = x
-        // member this.Zero() = this.Return()
+    // member this.ReturnFrom(x) = x
+    // member this.Zero() = this.Return()
 
-        // member this.Delay(f) = f
-        // member this.Run(f) = f ()
+    // member this.Delay(f) = f
+    // member this.Run(f) = f ()
 
-        // member this.While(guard, body) =
-        //     if not (guard ()) then
-        //         this.Zero()
-        //     else
-        //         this.Bind(body (), fun () -> this.While(guard, body))
+    // member this.While(guard, body) =
+    //     if not (guard ()) then
+    //         this.Zero()
+    //     else
+    //         this.Bind(body (), fun () -> this.While(guard, body))
 
-        // member this.TryWith(body, handler) =
-        //     try
-        //         this.ReturnFrom(body ())
-        //     with e ->
-        //         handler e
+    // member this.TryWith(body, handler) =
+    //     try
+    //         this.ReturnFrom(body ())
+    //     with e ->
+    //         handler e
 
-        // member this.TryFinally(body, compensation) =
-        //     try
-        //         this.ReturnFrom(body ())
-        //     finally
-        //         compensation ()
+    // member this.TryFinally(body, compensation) =
+    //     try
+    //         this.ReturnFrom(body ())
+    //     finally
+    //         compensation ()
 
-        // member this.Using(disposable: #System.IDisposable, body) =
-        //     let body' = fun () -> body disposable
+    // member this.Using(disposable: #System.IDisposable, body) =
+    //     let body' = fun () -> body disposable
 
-        //     this.TryFinally(
-        //         body',
-        //         fun () ->
-        //             match disposable with
-        //             | null -> ()
-        //             | disp -> disp.Dispose()
-        //     )
+    //     this.TryFinally(
+    //         body',
+    //         fun () ->
+    //             match disposable with
+    //             | null -> ()
+    //             | disp -> disp.Dispose()
+    //     )
 
-        // member this.For(sequence: seq<_>, body) =
-        //     this.Using(
-        //         sequence.GetEnumerator(),
-        //         fun enum -> this.While(enum.MoveNext, this.Delay(fun () -> body enum.Current))
-        //     )
+    // member this.For(sequence: seq<_>, body) =
+    //     this.Using(
+    //         sequence.GetEnumerator(),
+    //         fun enum -> this.While(enum.MoveNext, this.Delay(fun () -> body enum.Current))
+    //     )
 
-        // member this.Combine(a, b) = this.Bind(a, fun () -> b ())
+    // member this.Combine(a, b) = this.Bind(a, fun () -> b ())
 
     let result = new ResultBuilder()
 
