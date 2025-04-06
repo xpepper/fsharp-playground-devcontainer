@@ -408,14 +408,6 @@ module examples =
                     unvalidatedOrder.OrderLines
                     |> List.map (toValidatedOrderLine checkProductCodeExists)
 
-                let amountToBill =
-                    validatedOrderLines
-                    |> List.map (fun line -> line.Quantity |> OrderQuantity.value)
-                    |> List.sumBy (fun qty -> qty)
-
-                    // add them together as a BillingAmount
-                    |> BillingAmount.create
-
                 let validatedOrder: ValidatedOrder =
                     { OrderId = orderId
                       CustomerInfo = customerInfo
