@@ -72,11 +72,11 @@ module OrderId =
     let create str =
         if String.IsNullOrEmpty(str) then
             // use exceptions rather than Result for now
-            failwith "OrderId must not be null or empty"
+            Error "OrderId must not be null or empty"
         elif str.Length > 50 then
-            failwith "OrderId must not be more than 50 chars"
+            Error "OrderId must not be more than 50 chars"
         else
-            OrderId str
+            Ok(OrderId str)
 
     /// Extract the inner value from an OrderId
     let value (OrderId str) = // unwrap in the parameter!
@@ -100,18 +100,34 @@ type CustomerId = Undefined
 type CustomerInfo = CustomerInfo of string
 
 module CustomerInfo =
-    let create str = CustomerInfo str
+    let create str =
+        if String.IsNullOrEmpty(str) then
+            Error "CustomerInfo must not be null or empty"
+        elif str.Length > 50 then
+            Error "CustomerInfo must not be more than 50 chars"
+        else
+            Ok(CustomerInfo str)
+
     let value (CustomerInfo str) = str
+
 type ShippingAddress = ShippingAddress of string
 type BillingAddress = BillingAddress of string
 
 module ShippingAddress =
-    let create str = ShippingAddress str
+    let create str =
+        if String.IsNullOrEmpty(str) then
+            Error "ShippingAddress must not be null or empty"
+        elif str.Length > 50 then
+            Error "ShippingAddress must not be more than 50 chars"
+        else
+            Ok(ShippingAddress str)
+
     let value (ShippingAddress str) = str
 
 module BillingAddress =
     let create str = BillingAddress str
     let value (BillingAddress str) = str
+
 type Price = Price of decimal
 
 module Price =
@@ -177,15 +193,11 @@ type PricingError =
     | InvalidOrderLineError of OrderLineId
 
 
-type ServiceInfo = {
-    Name : string
-    Endpoint: Uri
-}
+type ServiceInfo = { Name: string; Endpoint: Uri }
 
-type RemoteServiceError = {
-    Service : ServiceInfo
-    Exception: System.Exception
-}
+type RemoteServiceError =
+    { Service: ServiceInfo
+      Exception: System.Exception }
 
 type PlaceOrderError =
     | Validation of ValidationError
@@ -356,36 +368,57 @@ module examples =
 
         validatedOrderLine
 
+    let toAddress checkAddressExists address =
+        let checkAddress: string -> string =
+            let errorMsg = sprintf "Invalid address: %A" address
+            predicateToPassthru errorMsg checkAddressExists
+
+        address |> checkAddress |> ShippingAddress.create
+
     type ValidateOrder =
         CheckProductCodeExists -> CheckAddressExists -> UnvalidatedOrder -> Result<ValidatedOrder, ValidationError>
 
     let validateOrder: ValidateOrder =
         fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
-            let orderId = unvalidatedOrder.OrderId |> OrderId.create
-            let customerInfo = unvalidatedOrder.CustomerInfo |> CustomerInfo.create
-            let shippingAddress = unvalidatedOrder.ShippingAddress |> ShippingAddress.create
-            let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
+            result {
+                let! orderId =
+                    unvalidatedOrder.OrderId
+                    |> OrderId.create
+                    |> Result.mapError(fun e -> { FieldName = "OrderId"; ErrorDescription = e })
 
-            let validatedOrderLines =
-                unvalidatedOrder.OrderLines
-                |> List.map (toValidatedOrderLine checkProductCodeExists)
+                let! customerInfo =
+                    unvalidatedOrder.CustomerInfo
+                    |> CustomerInfo.create
+                    |> Result.mapError(fun e -> { FieldName = "CustomerInfo"; ErrorDescription = e })
 
-            let amountToBill =
-                validatedOrderLines
-                |> List.map (fun line -> line.Quantity |> OrderQuantity.value)
-                |> List.sumBy (fun qty -> qty)
+                let! shippingAddress =
+                    unvalidatedOrder.ShippingAddress
+                    |> toAddress checkAddressExists
+                    |> Result.mapError(fun e -> { FieldName = "ShippingAddress"; ErrorDescription = e })
 
-                // add them together as a BillingAmount
-                |> BillingAmount.create
+                let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
 
-            let validatedOrder: ValidatedOrder =
-                { OrderId = orderId
-                  CustomerInfo = customerInfo
-                  ShippingAddress = shippingAddress
-                  BillingAddress = billingAddress
-                  OrderLines = validatedOrderLines }
+                let validatedOrderLines =
+                    unvalidatedOrder.OrderLines
+                    |> List.map (toValidatedOrderLine checkProductCodeExists)
 
-            Ok validatedOrder
+                let amountToBill =
+                    validatedOrderLines
+                    |> List.map (fun line -> line.Quantity |> OrderQuantity.value)
+                    |> List.sumBy (fun qty -> qty)
+
+                    // add them together as a BillingAmount
+                    |> BillingAmount.create
+
+                let validatedOrder: ValidatedOrder =
+                    { OrderId = orderId
+                      CustomerInfo = customerInfo
+                      ShippingAddress = shippingAddress
+                      BillingAddress = billingAddress
+                      OrderLines = validatedOrderLines }
+
+                return validatedOrder
+            }
 
     let createBillingEvent (placedOrder: PricedOrder) : BillableOrderPlaced option =
         let billingAmount = placedOrder.AmountToBill |> BillingAmount.value
@@ -478,45 +511,45 @@ module examples =
         sendAcknowledgment
         : PlaceOrderWorkflow =
         // set up local versions of the pipeline stages using partial application to bake-in dependencies
-            let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-            let priceOrder = priceOrder getProductPrice
+        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+        let priceOrder = priceOrder getProductPrice
 
-            let acknowledgeOrder =
-                acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
+        let acknowledgeOrder =
+            acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
 
-            fun unvalidatedOrder ->
-                unvalidatedOrder
-                |> validateOrder
-                |> priceOrder
-                |> withAcknowledgeOrder acknowledgeOrder
-                |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
+        fun unvalidatedOrder ->
+            unvalidatedOrder
+            |> validateOrder
+            |> priceOrder
+            |> withAcknowledgeOrder acknowledgeOrder
+            |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
 
     // our "composition root" function
     let checkProductCodeExists: CheckProductCodeExists = fun _ -> true
     let checkAddressExists: CheckAddressExists = fun _ -> true
     let getProductPrice: GetProductPrice = fun _ -> Price.create 1.0M
 
-    let serviceInfo = {
-        Name = "AddressCheckingService"
-        Endpoint = Uri("http://address-checking-service")
-    }
+    let serviceInfo =
+        { Name = "AddressCheckingService"
+          Endpoint = Uri("http://address-checking-service") }
 
     let serviceExceptionAdapter serviceInfo serviceFn x =
         try
-            Ok (serviceFn x)
+            Ok(serviceFn x)
         with
         | :? TimeoutException as ex ->
-            Error { Service = serviceInfo; Exception = ex }
+            Error
+                { Service = serviceInfo
+                  Exception = ex }
         | :? System.Net.WebException as ex ->
-            Error { Service = serviceInfo; Exception = ex }
+            Error
+                { Service = serviceInfo
+                  Exception = ex }
 
     let checkAddressExistsR address =
-        let adaptedService =
-            serviceExceptionAdapter serviceInfo checkAddressExists
+        let adaptedService = serviceExceptionAdapter serviceInfo checkAddressExists
 
-        address
-            |> adaptedService
-            |> Result.mapError RemoteService
+        address |> adaptedService |> Result.mapError RemoteService
 
 
     let createAcknowledgmentLetter: CreateOrderAcknowledgmentLetter =
@@ -538,49 +571,46 @@ module examples =
             sendAcknowledgment
 
     let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+
     let validateOrderAdapted input =
-        input
-        |> validateOrder
-        |> Result.mapError PlaceOrderError.Validation
+        input |> validateOrder |> Result.mapError PlaceOrderError.Validation
 
     let priceOrder = priceOrder getProductPrice
-    let priceOrderAdapted input =
-        input
-        |> priceOrder
-        |> Result.mapError PlaceOrderError.Pricing
 
-    let acknowledgeOrder = acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
-    let placeOrder unvalidatedOrder =
+    let priceOrderAdapted input =
+        input |> priceOrder |> Result.mapError PlaceOrderError.Pricing
+
+    let acknowledgeOrder =
+        acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
+
+    let placeOrder2 unvalidatedOrder =
         unvalidatedOrder
         |> validateOrderAdapted
         |> Result.bind priceOrderAdapted
         |> also (printfn "Processing value: %A")
         |> Result.map (fun pricedOrder ->
             let acknowledgment = acknowledgeOrder pricedOrder
-            createEvents pricedOrder acknowledgment
-        )
+            createEvents pricedOrder acknowledgment)
 
-    let placeOrder2 unvalidatedOrder =
+    let placeOrder unvalidatedOrder =
         result {
-            let! validatedOrder =
-                validateOrder unvalidatedOrder
-                |> Result.mapError PlaceOrderError.Validation
-            let! pricedOrder =
-                priceOrder validatedOrder
-                |> Result.mapError PlaceOrderError.Pricing
+            let! validatedOrder = validateOrder unvalidatedOrder |> Result.mapError PlaceOrderError.Validation
+            let! pricedOrder = priceOrder validatedOrder |> Result.mapError PlaceOrderError.Pricing
             let acknowledgment = acknowledgeOrder pricedOrder
             return createEvents pricedOrder acknowledgment
         }
 
 
-    placeOrder {
-        OrderId = "123"
-        CustomerInfo = "John Doe"
-        ShippingAddress = "123 Main St"
-        BillingAddress = "456 Elm St"
-        OrderLines = [
-            { OrderLineId = "1"; ProductCode = "W1234"; Quantity = 10 }
-            { OrderLineId = "2"; ProductCode = "G123"; Quantity = 5 }
-        ]
-    }
+    placeOrder
+        { OrderId = "123"
+          CustomerInfo = "John Doe"
+          ShippingAddress = "123 Main St"
+          BillingAddress = "456 Elm St"
+          OrderLines =
+            [ { OrderLineId = "1"
+                ProductCode = "W1234"
+                Quantity = 10 }
+              { OrderLineId = "2"
+                ProductCode = "G123"
+                Quantity = 5 } ] }
     |> printfn "%A"
