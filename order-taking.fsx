@@ -405,9 +405,10 @@ module examples =
 
                 let billingAddress = unvalidatedOrder.BillingAddress |> BillingAddress.create
 
-                let validatedOrderLines =
+                let! validatedOrderLines =
                     unvalidatedOrder.OrderLines
                     |> List.map (toValidatedOrderLine checkProductCodeExists)
+                    |> Result.sequence
 
                 let validatedOrder: ValidatedOrder =
                     { OrderId = orderId
