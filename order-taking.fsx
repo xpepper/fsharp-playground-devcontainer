@@ -226,7 +226,7 @@ module Order =
         let newOrderLine = { orderLine with Price = newPrice }
         let newOrderLines = order.OrderLines |> replaceOrderLine orderLineId newOrderLine
 
-        let newAmountToBill = newOrderLines |> List.sumBy (fun line -> line.Price)
+        let newAmountToBill = newOrderLines |> List.map (fun line -> line.Price) |> BillingAmount.sumPrices
 
         let newOrder =
             { order with
