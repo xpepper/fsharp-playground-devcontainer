@@ -213,9 +213,6 @@ type PlaceOrderError =
 
 // Domain - "verbs"
 
-// type PlaceOrder = UnvalidatedOrder -> Result<PlaceOrderEvents, PlaceOrderError>
-type PlaceOrder = UnvalidatedOrder -> PlaceOrderEvents
-
 module Order =
     let findOrderLine orderLineId orderLines =
         orderLines |> List.find (fun line -> line.Id = orderLineId)
@@ -317,7 +314,10 @@ type GetProductPrice = ProductCode -> Price
 type PriceOrder = GetProductPrice -> ValidatedOrder -> Result<PricedOrder, PricingError>
 
 // type PlaceOrderWorkflow = PlaceOrder -> PlaceOrderEvent list
-type PlaceOrderWorkflow = UnvalidatedOrder -> PlaceOrderEvent list
+type PlaceOrderWorkflow = UnvalidatedOrder -> Result<PlaceOrderEvent list, PlaceOrderError>
+
+// type PlaceOrder = UnvalidatedOrder -> Result<PlaceOrderEvents, PlaceOrderError>
+type PlaceOrder = PlaceOrderWorkflow
 
 type CreateOrderAcknowledgmentLetter = PricedOrder -> HtmlString
 
@@ -567,12 +567,12 @@ module examples =
             createAcknowledgmentLetter
             sendAcknowledgment
 
-    let validateOrder = validateOrder checkProductCodeExists checkAddressExists
+    // let validateOrder = validateOrder checkProductCodeExists checkAddressExists
 
     let validateOrderAdapted input =
         input |> validateOrder |> Result.mapError PlaceOrderError.Validation
 
-    let priceOrder = priceOrder getProductPrice
+    // let priceOrder = priceOrder getProductPrice
 
     let priceOrderAdapted input =
         input |> priceOrder |> Result.mapError PlaceOrderError.Pricing
@@ -589,13 +589,18 @@ module examples =
             let acknowledgment = acknowledgeOrder pricedOrder
             createEvents pricedOrder acknowledgment)
 
-    let placeOrder unvalidatedOrder =
-        result {
-            let! validatedOrder = validateOrder unvalidatedOrder |> Result.mapError PlaceOrderError.Validation
-            let! pricedOrder = priceOrder validatedOrder |> Result.mapError PlaceOrderError.Pricing
-            let acknowledgment = acknowledgeOrder pricedOrder
-            return createEvents pricedOrder acknowledgment
-        }
+    let placeOrder : PlaceOrder =
+        fun unvalidatedOrder ->
+            result {
+                let! validatedOrder =
+                    validateOrder checkProductCodeExists checkAddressExists unvalidatedOrder
+                    |> Result.mapError PlaceOrderError.Validation
+                let! pricedOrder =
+                    priceOrder getProductPrice validatedOrder
+                    |> Result.mapError PlaceOrderError.Pricing
+                let acknowledgment = acknowledgeOrder pricedOrder
+                return createEvents pricedOrder acknowledgment
+            }
 
 
     placeOrder
