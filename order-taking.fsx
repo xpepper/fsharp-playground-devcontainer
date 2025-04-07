@@ -221,7 +221,7 @@ module Order =
         orderLines
         |> List.map (fun line -> if line.Id = orderLineId then newOrderLine else line)
 
-    let changeOrderLinePrice order orderLineId newPrice =
+    let changeOrderLinePrice (order: Order) orderLineId newPrice =
         let orderLine = order.OrderLines |> findOrderLine orderLineId
         let newOrderLine = { orderLine with Price = newPrice }
         let newOrderLines = order.OrderLines |> replaceOrderLine orderLineId newOrderLine
@@ -500,27 +500,6 @@ module examples =
         let acknowledgment = acknowledgeOrder pricedOrder
         (pricedOrder, acknowledgment)
 
-    let placeOrder
-        checkProductCodeExists
-        checkAddressExists
-        getProductPrice
-        createAcknowledgmentLetter
-        sendAcknowledgment
-        : PlaceOrderWorkflow =
-        // set up local versions of the pipeline stages using partial application to bake-in dependencies
-        let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-        let priceOrder = priceOrder getProductPrice
-
-        let acknowledgeOrder =
-            acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
-
-        fun unvalidatedOrder ->
-            unvalidatedOrder
-            |> validateOrder
-            |> priceOrder
-            |> withAcknowledgeOrder acknowledgeOrder
-            |> fun (pricedOrder, acknowledgment) -> createEvents pricedOrder acknowledgment
-
     // our "composition root" function
     let checkProductCodeExists: CheckProductCodeExists = fun _ -> true
     let checkAddressExists: CheckAddressExists = fun _ -> true
@@ -558,36 +537,8 @@ module examples =
         fun acknowledgment ->
             printfn "Sending acknowledgment to %A" acknowledgment.EmailAddress
             Sent
-
-    let placeOrder =
-        placeOrder
-            checkProductCodeExists
-            checkAddressExists
-            getProductPrice
-            createAcknowledgmentLetter
-            sendAcknowledgment
-
-    // let validateOrder = validateOrder checkProductCodeExists checkAddressExists
-
-    let validateOrderAdapted input =
-        input |> validateOrder |> Result.mapError PlaceOrderError.Validation
-
-    // let priceOrder = priceOrder getProductPrice
-
-    let priceOrderAdapted input =
-        input |> priceOrder |> Result.mapError PlaceOrderError.Pricing
-
     let acknowledgeOrder =
         acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
-
-    let placeOrder2 unvalidatedOrder =
-        unvalidatedOrder
-        |> validateOrderAdapted
-        |> Result.bind priceOrderAdapted
-        |> also (printfn "Processing value: %A")
-        |> Result.map (fun pricedOrder ->
-            let acknowledgment = acknowledgeOrder pricedOrder
-            createEvents pricedOrder acknowledgment)
 
     let placeOrder : PlaceOrder =
         fun unvalidatedOrder ->
