@@ -435,7 +435,7 @@ module examples =
             let letter = createAcknowledgmentLetter pricedOrder
 
             let acknowledgment =
-                { EmailAddress = pricedOrder.CustomerInfo.EmailAddress
+                { EmailAddress = EmailAddress (CustomerInfo.value pricedOrder.CustomerInfo)
                   Letter = letter }
             // if the acknowledgment was successfully sent,
             // return the corresponding event, else return None
@@ -443,7 +443,7 @@ module examples =
             | Sent ->
                 let event =
                     { OrderId = pricedOrder.OrderId
-                      EmailAddress = pricedOrder.CustomerInfo.EmailAddress }
+                      EmailAddress = EmailAddress (CustomerInfo.value pricedOrder.CustomerInfo) }
 
                 Some event
             | NotSent -> None
