@@ -332,17 +332,17 @@ module examples =
         if f x then x else failwith errorMessage
 
     let toProductCode (checkProductCodeExists: CheckProductCodeExists) productCode =
-        let checkProduct productCode  =
+        let checkProduct productCode =
             if checkProductCodeExists productCode then
                 Ok productCode
             else
                 let msg = sprintf "Invalid: %A" productCode
-                Error (ValidationError msg)
+                Error(ValidationError msg)
 
         productCode
-            |> ProductCode.create
-            |> Result.mapError ValidationError // convert creation error into ValidationError
-            |> Result.bind checkProduct
+        |> ProductCode.create
+        |> Result.mapError ValidationError // convert creation error into ValidationError
+        |> Result.bind checkProduct
 
     let toOrderQuantity productCode quantity =
         match productCode with
@@ -358,20 +358,20 @@ module examples =
             |> KilogramQuantity.create // to KilogramQuantity
             |> OrderQuantity.Kilograms // lift to OrderQuantity type
 
-    let toValidatedOrderLine checkProductExists (unvalidatedOrderLine:UnvalidatedOrderLine): Result<ValidatedOrderLine, ValidationError> =
+    let toValidatedOrderLine
+        checkProductExists
+        (unvalidatedOrderLine: UnvalidatedOrderLine)
+        : Result<ValidatedOrderLine, ValidationError> =
         result {
             let orderLineId = unvalidatedOrderLine.OrderLineId |> OrderLineId.create
-            let! productCode =
-                unvalidatedOrderLine.ProductCode
-                |> toProductCode checkProductExists
-            let quantity =
-                unvalidatedOrderLine.Quantity
-                |> toOrderQuantity productCode
-            let validatedOrderLine = {
-                OrderLineId = orderLineId
-                ProductCode = productCode
-                Quantity = quantity
-                }
+            let! productCode = unvalidatedOrderLine.ProductCode |> toProductCode checkProductExists
+            let quantity = unvalidatedOrderLine.Quantity |> toOrderQuantity productCode
+
+            let validatedOrderLine =
+                { OrderLineId = orderLineId
+                  ProductCode = productCode
+                  Quantity = quantity }
+
             return validatedOrderLine
         }
 
@@ -388,10 +388,7 @@ module examples =
     let validateOrder: ValidateOrder =
         fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
             result {
-                let! orderId =
-                    unvalidatedOrder.OrderId
-                    |> OrderId.create
-                    |> Result.mapError ValidationError
+                let! orderId = unvalidatedOrder.OrderId |> OrderId.create |> Result.mapError ValidationError
 
                 let! customerInfo =
                     unvalidatedOrder.CustomerInfo
