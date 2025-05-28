@@ -89,6 +89,12 @@ let printResult = function
   |> printResult // prints "Result is 18"
 
 
+let add (x: int) (y: float): float = float (x) + y
+
+add 2 3.0 // returns 5.0
+3.0 |> add 2 // returns 5.0
+
+
 
 
 
