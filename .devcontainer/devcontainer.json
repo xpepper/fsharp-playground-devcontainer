@@ -13,8 +13,9 @@
 		// Configure properties specific to VS Code.
 		"vscode": {
 			"extensions": [
+				"ms-dotnettools.csharp",
 				"Ionide.Ionide-fsharp",
-				"ms-dotnettools.csharp"
+				"paolodellepiane.fantomas-fmt"
 			]
 		}
 	},
@@ -23,7 +24,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "dotnet restore",
+	"postCreateCommand": "dotnet tool restore"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
