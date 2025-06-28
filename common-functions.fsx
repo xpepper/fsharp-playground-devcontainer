@@ -24,7 +24,7 @@ module Result =
         | Error first, _ -> Error first
         | _, Error rest -> Error rest
 
-    let sequence (aListOfResults: Result<'a,'e> list): Result<'a list, 'e> =
+    let sequence (aListOfResults: Result<'a, 'e> list) : Result<'a list, 'e> =
         let initialValue = Ok []
         List.foldBack prepend aListOfResults initialValue
 

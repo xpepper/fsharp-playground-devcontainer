@@ -226,7 +226,8 @@ module Order =
         let newOrderLine = { orderLine with Price = newPrice }
         let newOrderLines = order.OrderLines |> replaceOrderLine orderLineId newOrderLine
 
-        let newAmountToBill = newOrderLines |> List.map (fun line -> line.Price) |> BillingAmount.sumPrices
+        let newAmountToBill =
+            newOrderLines |> List.map (fun line -> line.Price) |> BillingAmount.sumPrices
 
         let newOrder =
             { order with
@@ -435,7 +436,7 @@ module examples =
             let letter = createAcknowledgmentLetter pricedOrder
 
             let acknowledgment =
-                { EmailAddress = EmailAddress (CustomerInfo.value pricedOrder.CustomerInfo)
+                { EmailAddress = EmailAddress(CustomerInfo.value pricedOrder.CustomerInfo)
                   Letter = letter }
             // if the acknowledgment was successfully sent,
             // return the corresponding event, else return None
@@ -443,7 +444,7 @@ module examples =
             | Sent ->
                 let event =
                     { OrderId = pricedOrder.OrderId
-                      EmailAddress = EmailAddress (CustomerInfo.value pricedOrder.CustomerInfo) }
+                      EmailAddress = EmailAddress(CustomerInfo.value pricedOrder.CustomerInfo) }
 
                 Some event
             | NotSent -> None
@@ -537,54 +538,57 @@ module examples =
         fun acknowledgment ->
             printfn "Sending acknowledgment to %A" acknowledgment.EmailAddress
             Sent
+
     let acknowledgeOrder =
         acknowledgeOrder createAcknowledgmentLetter sendAcknowledgment
 
-    let placeOrder : PlaceOrder =
+    let placeOrder: PlaceOrder =
         fun unvalidatedOrder ->
             result {
                 let! validatedOrder =
                     validateOrder checkProductCodeExists checkAddressExists unvalidatedOrder
                     |> Result.mapError PlaceOrderError.Validation
+
                 let! pricedOrder =
                     priceOrder getProductPrice validatedOrder
                     |> Result.mapError PlaceOrderError.Pricing
+
                 let acknowledgment = acknowledgeOrder pricedOrder
                 return createEvents pricedOrder acknowledgment
             }
 
-    let validateOrder : ValidateOrder =
+    let validateOrder: ValidateOrder =
         fun checkProductCodeExists checkAddressExists unvalidatedOrder ->
             asyncResult {
                 let! orderId =
                     unvalidatedOrder.OrderId
                     |> OrderId.create
                     |> Result.mapError ValidationError
-                    |> AsyncResult.ofResult   // lift a Result to AsyncResult
-                let! customerInfo =
-                    unvalidatedOrder.CustomerInfo
-                    |> toCustomerInfo
-                    |> AsyncResult.ofResult
+                    |> AsyncResult.ofResult // lift a Result to AsyncResult
+
+                let! customerInfo = unvalidatedOrder.CustomerInfo |> toCustomerInfo |> AsyncResult.ofResult
+
                 let! checkedShippingAddress = // extract the checked address
-                    unvalidatedOrder.ShippingAddress
-                    |> toCheckedAddress checkAddressExists
-                let! shippingAddress =        // process checked address
-                    checkedShippingAddress
-                    |> toAddress
-                    |> AsyncResult.ofResult
-                let! billingAddress = dotDotDot()
+                    unvalidatedOrder.ShippingAddress |> toCheckedAddress checkAddressExists
+
+                let! shippingAddress = // process checked address
+                    checkedShippingAddress |> toAddress |> AsyncResult.ofResult
+
+                let! billingAddress = dotDotDot ()
+
                 let! lines =
                     unvalidatedOrder.Lines
                     |> List.map (toValidatedOrderLine checkProductCodeExists)
                     |> Result.sequence // convert list of Results to a single Result
                     |> AsyncResult.ofResult
-                let validatedOrder : ValidatedOrder = {
-                    OrderId  = orderId
-                    CustomerInfo = customerInfo
-                    ShippingAddress = shippingAddress
-                    BillingAddress = billingAddress
-                    Lines = lines
-                }
+
+                let validatedOrder: ValidatedOrder =
+                    { OrderId = orderId
+                      CustomerInfo = customerInfo
+                      ShippingAddress = shippingAddress
+                      BillingAddress = billingAddress
+                      Lines = lines }
+
                 return validatedOrder
             }
 
